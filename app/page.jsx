@@ -44,15 +44,60 @@ export default function N8nDeploy() {
     if (!form.email || !form.instance) return;
 
     if (plan === "pro") {
-      // In production: call your backend → create Stripe Checkout session → redirect
-      // Backend endpoint: POST /api/checkout { email, instance, priceId }
-      // For now, open Railway deploy link after payment would be confirmed
-      alert("In production: Stripe Checkout opens here.\nSee the Publishing Guide for full backend setup.");
+      setDeploying(true);
+      try {
+        // Step 1: Create Razorpay order
+        const res = await fetch("/api/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: form.email }),
+        });
+        const data = await res.json();
+
+        // Step 2: Open Razorpay payment modal
+        const options = {
+          key: data.keyId,
+          amount: data.amount,
+          currency: data.currency,
+          name: "n8nShip",
+          description: "n8nShip Pro - Monthly",
+          order_id: data.orderId,
+          handler: async function (response) {
+            // Step 3: Verify payment + deploy n8n
+            const verifyRes = await fetch("/api/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                email: form.email,
+              }),
+            });
+            const verifyData = await verifyRes.json();
+            if (verifyData.success) {
+              setDeployUrl(verifyData.deploymentUrl);
+              setDeploying(false);
+              setDeployed(true);
+            }
+          },
+          prefill: { email: form.email },
+          theme: { color: "#FF5C00" },
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+        setDeploying(false);
+      } catch (err) {
+        console.error(err);
+        setDeploying(false);
+        alert("Payment failed. Please try again.");
+      }
       return;
     }
 
+    // Free plan deploy
     setDeploying(true);
-    // Simulate deploy (replace with real Railway/Render API call)
     await new Promise(r => setTimeout(r, 3000));
     setDeployUrl(`https://${form.instance.toLowerCase().replace(/\s+/g, "-")}.up.railway.app`);
     setDeploying(false);
@@ -67,6 +112,7 @@ export default function N8nDeploy() {
 
   return (
     <>
+      <script src="https://checkout.razorpay.com/v1/checkout.js" />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap');
 
