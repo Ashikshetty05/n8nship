@@ -63,6 +63,8 @@ export async function POST(request) {
 }
 
 async function deployN8n(email) {
+  const projectName = `n8n-${email.split("@")[0]}-${Date.now()}`;
+  
   const response = await fetch("https://backboard.railway.app/graphql/v2", {
     method: "POST",
     headers: {
@@ -71,27 +73,29 @@ async function deployN8n(email) {
     },
     body: JSON.stringify({
       query: `
-        mutation deployTemplate($input: TemplateDeployInput!) {
-          templateDeploy(input: $input) {
-            projectId
-            workflowId
+        mutation projectCreate($input: ProjectCreateInput!) {
+          projectCreate(input: $input) {
+            id
+            name
           }
         }
       `,
       variables: {
         input: {
-          templateCode: "n8n",
-          teamId: null,
-          projectName: `n8n-${email.split("@")[0]}-${Date.now()}`,
+          name: projectName,
         },
       },
     }),
   });
 
   const data = await response.json();
-  console.log("Railway deploy response:", data);
+  console.log("Railway deploy response:", JSON.stringify(data));
+  
+  const projectId = data?.data?.projectCreate?.id;
 
   return {
-    url: `https://railway.app/project/${data?.data?.templateDeploy?.projectId}`,
+    url: projectId 
+      ? `https://railway.app/project/${projectId}` 
+      : `https://railway.app`,
   };
 }
