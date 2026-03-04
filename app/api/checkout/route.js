@@ -1,14 +1,51 @@
 import { NextResponse } from "next/server";
 import Razorpay from "razorpay";
+import { z } from "zod";
+
+// Input validation schema
+const checkoutSchema = z.object({
+  email: z
+    .string()
+    .email("Invalid email address")
+    .max(254, "Email too long")
+    .toLowerCase()
+    .trim(),
+});
 
 export async function POST(request) {
   try {
-    const { email } = await request.json();
-
-    if (!email) {
-      return NextResponse.json({ error: "Email is required" }, { status: 400 });
+    // 1. Validate content type
+    const contentType = request.headers.get("content-type");
+    if (!contentType?.includes("application/json")) {
+      return NextResponse.json(
+        { error: "Content-Type must be application/json" },
+        { status: 400 }
+      );
     }
 
+    // 2. Parse and validate input
+    const body = await request.json();
+    const result = checkoutSchema.safeParse(body);
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error.errors[0].message },
+        { status: 400 }
+      );
+    }
+
+    const { email } = result.data;
+
+    // 3. Check API keys exist
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+      console.error("Missing Razorpay API keys");
+      return NextResponse.json(
+        { error: "Payment service unavailable" },
+        { status: 503 }
+      );
+    }
+
+    // 4. Create Razorpay order
     const razorpay = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID,
       key_secret: process.env.RAZORPAY_KEY_SECRET,
@@ -17,7 +54,7 @@ export async function POST(request) {
     const order = await razorpay.orders.create({
       amount: 1900 * 100,
       currency: "INR",
-      receipt: `receipt_${Date.now()}`,
+      receipt: `rcpt_${Date.now()}`,
       notes: { email, product: "n8nShip Pro" },
     });
 
@@ -28,7 +65,10 @@ export async function POST(request) {
       keyId: process.env.RAZORPAY_KEY_ID,
     });
   } catch (error) {
-    console.error("Checkout error:", error);
-    return NextResponse.json({ error: "Failed to create order" }, { status: 500 });
+    console.error("Checkout error:", error.message);
+    return NextResponse.json(
+      { error: "Failed to create order. Please try again." },
+      { status: 500 }
+    );
   }
 }

@@ -1,29 +1,92 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { z } from "zod";
 
+// Input validation schema
+const verifySchema = z.object({
+  razorpay_order_id: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^order_[a-zA-Z0-9]+$/, "Invalid order ID"),
+  razorpay_payment_id: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^pay_[a-zA-Z0-9]+$/, "Invalid payment ID"),
+  razorpay_signature: z
+    .string()
+    .min(1)
+    .max(256)
+    .regex(/^[a-f0-9]+$/, "Invalid signature"),
+  email: z
+    .string()
+    .email("Invalid email")
+    .max(254)
+    .toLowerCase()
+    .trim(),
+});
 
 export async function POST(request) {
   try {
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, email } =
-      await request.json();
-
-    // Verify payment signature
-    const body = razorpay_order_id + "|" + razorpay_payment_id;
-    const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(body.toString())
-      .digest("hex");
-
-    if (expectedSignature !== razorpay_signature) {
-      return NextResponse.json({ error: "Invalid payment signature" }, { status: 400 });
+    // 1. Validate content type
+    const contentType = request.headers.get("content-type");
+    if (!contentType?.includes("application/json")) {
+      return NextResponse.json(
+        { error: "Content-Type must be application/json" },
+        { status: 400 }
+      );
     }
 
-    // Deploy n8n instance on Railway
+    // 2. Parse and validate input
+    const body = await request.json();
+    const result = verifySchema.safeParse(body);
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error.errors[0].message },
+        { status: 400 }
+      );
+    }
+
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, email } = result.data;
+
+    // 3. Check API keys exist
+    if (!process.env.RAZORPAY_KEY_SECRET) {
+      console.error("Missing Razorpay secret key");
+      return NextResponse.json(
+        { error: "Payment verification unavailable" },
+        { status: 503 }
+      );
+    }
+
+    // 4. Verify payment signature (OWASP: use timing-safe comparison)
+    const body_str = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(body_str)
+      .digest("hex");
+
+    // Timing-safe comparison to prevent timing attacks
+    const sigBuffer = Buffer.from(razorpay_signature, "hex");
+    const expectedBuffer = Buffer.from(expectedSignature, "hex");
+
+    if (
+      sigBuffer.length !== expectedBuffer.length ||
+      !crypto.timingSafeEqual(sigBuffer, expectedBuffer)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid payment signature" },
+        { status: 400 }
+      );
+    }
+
+    // 5. Deploy n8n instance on Railway
     const deployResult = await deployN8n(email);
 
-    // Send credentials email
+    // 6. Send credentials email
+    const resend = new Resend(process.env.RESEND_API_KEY);
     await resend.emails.send({
       from: "n8nShip <onboarding@resend.dev>",
       to: email,
@@ -57,14 +120,17 @@ export async function POST(request) {
       deploymentUrl: deployResult.url,
     });
   } catch (error) {
-    console.error("Verify error:", error);
-    return NextResponse.json({ error: "Verification failed" }, { status: 500 });
+    console.error("Verify error:", error.message);
+    return NextResponse.json(
+      { error: "Verification failed. Please contact support." },
+      { status: 500 }
+    );
   }
 }
 
 async function deployN8n(email) {
   const projectName = `n8n-${email.split("@")[0]}-${Date.now()}`;
-  
+
   const response = await fetch("https://backboard.railway.app/graphql/v2", {
     method: "POST",
     headers: {
@@ -90,12 +156,12 @@ async function deployN8n(email) {
 
   const data = await response.json();
   console.log("Railway deploy response:", JSON.stringify(data));
-  
+
   const projectId = data?.data?.projectCreate?.id;
 
   return {
-    url: projectId 
-      ? `https://railway.app/project/${projectId}` 
+    url: projectId
+      ? `https://railway.app/project/${projectId}`
       : `https://railway.app`,
   };
 }
