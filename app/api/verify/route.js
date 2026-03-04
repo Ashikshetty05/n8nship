@@ -2,10 +2,10 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request) {
   try {
+    const resend = new Resend(process.env.RESEND_API_KEY);
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, email } =
       await request.json();
 
