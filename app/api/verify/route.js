@@ -93,22 +93,27 @@ export async function POST(request) {
       subject: "🚀 Your n8n instance is ready!",
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background: #080808; color: #F0EDE8;">
-          <h1 style="color: #FF5C00; font-size: 28px; margin-bottom: 8px;">Your n8n is live! 🚀</h1>
-          <p style="color: #888; margin-bottom: 32px;">Thanks for subscribing to n8nShip Pro. Your instance is being set up right now.</p>
+          <h1 style="color: #FF5C00; font-size: 28px; margin-bottom: 8px;">Your n8n is ready to deploy! 🚀</h1>
+          <p style="color: #888; margin-bottom: 32px;">Thanks for subscribing to n8nShip Pro. Follow these simple steps to get your n8n instance running!</p>
           
-          <div style="background: #111; border: 1px solid #222; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
-            <p style="color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px;">Your n8n URL</p>
-            <a href="${deployResult.url}" style="color: #FF5C00; font-size: 16px; text-decoration: none;">${deployResult.url}</a>
+          <div style="background: #111; border: 1px solid #FF5C00; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+            <p style="color: #FF5C00; font-size: 14px; font-weight: bold; margin-bottom: 16px;">⚡ Step 1: Open your Railway project</p>
+            <a href="${deployResult.url}" style="display: inline-block; background: #FF5C00; color: #000; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">Open My Project →</a>
           </div>
 
           <div style="background: #111; border: 1px solid #222; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
-            <p style="color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 16px;">Login Credentials</p>
+            <p style="color: #FF5C00; font-size: 14px; font-weight: bold; margin-bottom: 16px;">⚡ Step 2: Deploy n8n template</p>
+            <p style="color: #888; font-size: 13px; margin-bottom: 16px;">Click the button below to deploy n8n directly into your project:</p>
+            <a href="${deployResult.templateUrl}" style="display: inline-block; background: #222; color: #F0EDE8; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; border: 1px solid #444;">Deploy n8n Template →</a>
+          </div>
+
+          <div style="background: #111; border: 1px solid #222; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+            <p style="color: #FF5C00; font-size: 14px; font-weight: bold; margin-bottom: 16px;">⚡ Step 3: Login credentials</p>
             <p style="margin: 0; font-size: 14px;"><span style="color: #888;">Email:</span> <strong>${email}</strong></p>
-            <p style="margin: 8px 0 0; font-size: 14px;"><span style="color: #888;">Password:</span> <strong>Change this after first login!</strong></p>
+            <p style="margin: 8px 0 0; font-size: 14px;"><span style="color: #888;">Password:</span> <strong>Set during first login</strong></p>
           </div>
 
-          <p style="color: #555; font-size: 13px;">Your instance may take up to 2 minutes to be fully ready. If you have any issues, reply to this email.</p>
-          
+          <p style="color: #555; font-size: 13px;">Need help? Just reply to this email and we'll get you sorted!</p>
           <p style="color: #333; font-size: 12px; margin-top: 40px;">n8nShip — Deploy n8n in 60 seconds</p>
         </div>
       `,
@@ -153,14 +158,12 @@ async function deployN8n(email) {
   });
 
   const projectData = await projectRes.json();
-  console.log("Full Railway response:", JSON.stringify(projectData));
-
   const projectId = projectData?.data?.projectCreate?.id;
 
-  // Even if id is missing, continue and send email
   return {
     url: projectId
-      ? `https://railway.app/project/${projectId}`
-      : `https://railway.com/dashboard`,
+      ? `https://railway.com/project/${projectId}`
+      : `https://railway.com/new`,
+    templateUrl: `https://railway.com/template/n8n`,
   };
 }
