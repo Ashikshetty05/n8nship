@@ -159,8 +159,8 @@ async function deployN8n(email) {
   const projectId = projectData?.data?.projectCreate?.id;
   const environmentId = projectData?.data?.projectCreate?.defaultEnvironment?.id;
 
-  if (!projectId) {
-    console.error("Railway error:", JSON.stringify(projectData?.errors));
+ if (!projectId) {
+    console.error("Railway full response:", JSON.stringify(projectData));
     throw new Error("Failed to create Railway project");
   }
 
