@@ -131,37 +131,40 @@ export async function POST(request) {
 async function deployN8n(email) {
   const projectName = `n8n-${email.split("@")[0]}-${Date.now()}`;
 
-  const response = await fetch("https://backboard.railway.app/graphql/v2", {
+  // Step 1: Create project
+  const projectRes = await fetch("https://backboard.railway.app/graphql/v2", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${process.env.RAILWAY_API_TOKEN}`,
     },
     body: JSON.stringify({
-      query: `
-        mutation projectCreate($input: ProjectCreateInput!) {
-          projectCreate(input: $input) {
-            id
-            name
-          }
-        }
-      `,
-      variables: {
-        input: {
-          name: projectName,
-        },
-      },
+      query: `mutation { projectCreate(input: { name: "${projectName}" }) { id defaultEnvironment { id } } }`,
     }),
   });
 
-  const data = await response.json();
-  console.log("Railway deploy response:", JSON.stringify(data));
+  const projectData = await projectRes.json();
+  const projectId = projectData?.data?.projectCreate?.id;
+  const environmentId = projectData?.data?.projectCreate?.defaultEnvironment?.id;
 
-  const projectId = data?.data?.projectCreate?.id;
+  if (!projectId) throw new Error("Failed to create Railway project");
+
+  // Step 2: Create n8n service with Docker image
+  const serviceRes = await fetch("https://backboard.railway.app/graphql/v2", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.RAILWAY_API_TOKEN}`,
+    },
+    body: JSON.stringify({
+      query: `mutation { serviceCreate(input: { projectId: "${projectId}", name: "n8n", source: { image: "n8nio/n8n" } }) { id } }`,
+    }),
+  });
+
+  const serviceData = await serviceRes.json();
+  console.log("Service create response:", JSON.stringify(serviceData));
 
   return {
-    url: projectId
-      ? `https://railway.app/project/${projectId}`
-      : `https://railway.app`,
+    url: `https://railway.app/project/${projectId}`,
   };
 }
