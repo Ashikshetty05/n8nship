@@ -164,6 +164,6 @@ async function deployN8n(email) {
     url: projectId
       ? `https://railway.com/project/${projectId}`
       : `https://railway.com/new`,
-    templateUrl: `https://railway.app/template/n8n`,
+    templateUrl: `https://railway.com/new/template/n8n`,
   };
 }
