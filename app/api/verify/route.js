@@ -139,17 +139,32 @@ async function deployN8n(email) {
       Authorization: `Bearer ${process.env.RAILWAY_API_TOKEN}`,
     },
     body: JSON.stringify({
-      query: `mutation { projectCreate(input: { name: "${projectName}" }) { id defaultEnvironment { id } } }`,
+      query: `
+        mutation projectCreate($input: ProjectCreateInput!) {
+          projectCreate(input: $input) {
+            id
+            defaultEnvironment { id }
+          }
+        }
+      `,
+      variables: {
+        input: { name: projectName },
+      },
     }),
   });
 
   const projectData = await projectRes.json();
+  console.log("Project create:", JSON.stringify(projectData));
+  
   const projectId = projectData?.data?.projectCreate?.id;
   const environmentId = projectData?.data?.projectCreate?.defaultEnvironment?.id;
 
-  if (!projectId) throw new Error("Failed to create Railway project");
+  if (!projectId) {
+    console.error("Railway error:", JSON.stringify(projectData?.errors));
+    throw new Error("Failed to create Railway project");
+  }
 
-  // Step 2: Create n8n service with Docker image
+  // Step 2: Create n8n service
   const serviceRes = await fetch("https://backboard.railway.app/graphql/v2", {
     method: "POST",
     headers: {
@@ -157,12 +172,25 @@ async function deployN8n(email) {
       Authorization: `Bearer ${process.env.RAILWAY_API_TOKEN}`,
     },
     body: JSON.stringify({
-      query: `mutation { serviceCreate(input: { projectId: "${projectId}", name: "n8n", source: { image: "n8nio/n8n" } }) { id } }`,
+      query: `
+        mutation serviceCreate($input: ServiceCreateInput!) {
+          serviceCreate(input: $input) {
+            id
+          }
+        }
+      `,
+      variables: {
+        input: {
+          projectId: projectId,
+          name: "n8n",
+          source: { image: "n8nio/n8n" },
+        },
+      },
     }),
   });
 
   const serviceData = await serviceRes.json();
-  console.log("Service create response:", JSON.stringify(serviceData));
+  console.log("Service create:", JSON.stringify(serviceData));
 
   return {
     url: `https://railway.app/project/${projectId}`,
