@@ -43,12 +43,12 @@ export async function POST(request) {
     }
 
     // 2. Parse and validate input
-    const body = await request.json();
-    const result = verifySchema.safeParse(body);
+    const requestBody = await request.json();
+    const result = verifySchema.safeParse(requestBody);
 
     if (!result.success) {
       return NextResponse.json(
-        { error: result.error.errors[0].message },
+        { error: result.error.issues?.[0]?.message || "Invalid input" },
         { status: 400 }
       );
     }
@@ -71,7 +71,6 @@ export async function POST(request) {
       .update(body_str)
       .digest("hex");
 
-    // Timing-safe comparison to prevent timing attacks
     const sigBuffer = Buffer.from(razorpay_signature, "hex");
     const expectedBuffer = Buffer.from(expectedSignature, "hex");
 
@@ -85,51 +84,50 @@ export async function POST(request) {
       );
     }
 
-    // 5. Deploy n8n instance on Railway
+    // 5. Initialize clients
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY
+    );
+    const redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    });
+
+    // 6. Deploy n8n instance on Railway
     const deployResult = await deployN8n(email);
 
-    // Save customer to Supabase
-await supabase.from("customers").upsert({
-  email,
-  is_pro: true,
-  currency,
-  railway_project_url: deployResult.url,
-  trial_started_at: new Date().toISOString(),
-  trial_ends_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-});
+    // 7. Save customer to Supabase
+    await supabase.from("customers").upsert({
+      email,
+      is_pro: true,
+      currency,
+      railway_project_url: deployResult.url,
+      trial_started_at: new Date().toISOString(),
+      trial_ends_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+    });
 
-// Save payment to Supabase
-await supabase.from("payments").insert({
-  email,
-  razorpay_order_id,
-  razorpay_payment_id,
-  amount: currency === "INR" ? 999 : 11,
-  currency,
-  status: "success",
-});
+    // 8. Save payment to Supabase
+    await supabase.from("payments").insert({
+      email,
+      razorpay_order_id,
+      razorpay_payment_id,
+      amount: currency === "INR" ? 999 : 11,
+      currency,
+      status: "success",
+    });
 
-    // 6. Send credentials email
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    // 9. Store trial start date in Redis
+    const trialKey = `trial:${email}`;
+    const trialExists = await redis.get(trialKey);
+    if (!trialExists) {
+      await redis.set(trialKey, Date.now(), { ex: 60 * 60 * 24 * 3 });
+    }
 
-    // Initialize Supabase
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
-
-   // Store trial start date in Redis
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
-const trialKey = `trial:${email}`;
-const trialExists = await redis.get(trialKey);
-if (!trialExists) {
-  await redis.set(trialKey, Date.now(), { ex: 60 * 60 * 24 * 3 });
-}
-
-await resend.emails.send({
-  from: "n8nShip <onboarding@resend.dev>",
+    // 10. Send credentials email
+    await resend.emails.send({
+      from: "n8nShip <onboarding@resend.dev>",
       to: email,
       subject: "🚀 Your n8n instance is ready!",
       html: `
@@ -199,6 +197,7 @@ async function deployN8n(email) {
   });
 
   const projectData = await projectRes.json();
+  console.log("Full Railway response:", JSON.stringify(projectData));
   const projectId = projectData?.data?.projectCreate?.id;
 
   return {
