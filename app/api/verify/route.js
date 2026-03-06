@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { z } from "zod";
 import { Redis } from "@upstash/redis";
+import { createClient } from "@supabase/supabase-js";
 
 // Input validation schema
 const verifySchema = z.object({
@@ -27,6 +28,7 @@ const verifySchema = z.object({
     .max(254)
     .toLowerCase()
     .trim(),
+  currency: z.enum(["INR", "USD"]).default("INR"),
 });
 
 export async function POST(request) {
@@ -51,7 +53,7 @@ export async function POST(request) {
       );
     }
 
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, email } = result.data;
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, email, currency } = result.data;
 
     // 3. Check API keys exist
     if (!process.env.RAZORPAY_KEY_SECRET) {
@@ -86,10 +88,36 @@ export async function POST(request) {
     // 5. Deploy n8n instance on Railway
     const deployResult = await deployN8n(email);
 
+    // Save customer to Supabase
+await supabase.from("customers").upsert({
+  email,
+  is_pro: true,
+  currency,
+  railway_project_url: deployResult.url,
+  trial_started_at: new Date().toISOString(),
+  trial_ends_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+});
+
+// Save payment to Supabase
+await supabase.from("payments").insert({
+  email,
+  razorpay_order_id,
+  razorpay_payment_id,
+  amount: currency === "INR" ? 999 : 11,
+  currency,
+  status: "success",
+});
+
     // 6. Send credentials email
     const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Store trial start date in Redis
+    // Initialize Supabase
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
+
+   // Store trial start date in Redis
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
   token: process.env.UPSTASH_REDIS_REST_TOKEN,

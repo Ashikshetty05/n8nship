@@ -86,6 +86,7 @@ export default function N8nDeploy() {
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
                 email: form.email,
+                currency: price.currency,
               }),
             });
             const verifyData = await verifyRes.json();
