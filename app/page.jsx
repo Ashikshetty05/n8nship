@@ -1,13 +1,11 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 
-// ── Stripe public key placeholder ──────────────────────────────────────────
-// Replace with your real key from stripe.com/dashboard → Developers → API keys
-const STRIPE_PUBLIC_KEY = "pk_live_YOUR_STRIPE_KEY_HERE";
-const STRIPE_PRO_PRICE_ID = "price_YOUR_PRICE_ID_HERE"; // $19/mo recurring
-
-// ── Railway deploy hook (replace with your Railway template URL) ──────────
-const RAILWAY_TEMPLATE_URL = "https://railway.app/template/YOUR_TEMPLATE_ID?referralCode=YOUR_CODE";
+// Geo-based pricing
+const PRICES = {
+  IN: { currency: "INR", symbol: "₹", amount: 999, display: "999" },
+  DEFAULT: { currency: "USD", symbol: "$", amount: 11, display: "11" },
+};
 
 export default function N8nDeploy() {
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -19,6 +17,8 @@ export default function N8nDeploy() {
   const [deployUrl, setDeployUrl] = useState("");
   const [ticker, setTicker] = useState(0);
   const [scrolled, setScrolled] = useState(false);
+  const [price, setPrice] = useState(PRICES.DEFAULT);
+  const [trialDaysLeft, setTrialDaysLeft] = useState(3);
   const heroRef = useRef(null);
 
   useEffect(() => {
@@ -30,6 +30,20 @@ export default function N8nDeploy() {
     const onScroll = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    // Detect country and set price
+    fetch("https://ipapi.co/json/")
+      .then(r => r.json())
+      .then(data => {
+        if (data.country_code === "IN") {
+          setPrice(PRICES.IN);
+        } else {
+          setPrice(PRICES.DEFAULT);
+        }
+      })
+      .catch(() => setPrice(PRICES.DEFAULT));
   }, []);
 
   const openWizard = (selectedPlan) => {
@@ -50,7 +64,7 @@ export default function N8nDeploy() {
         const res = await fetch("/api/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: form.email }),
+          body: JSON.stringify({ email: form.email, currency: price.currency }),
         });
         const data = await res.json();
 
@@ -745,7 +759,7 @@ export default function N8nDeploy() {
           </div>
           <div className="price-card pro">
             <div className="price-name">Pro</div>
-            <div className="price-amount">$19 <span>/ month</span></div>
+            <div className="price-amount">{price.symbol}{price.display} <span>/ month</span></div>
             <div className="price-desc">For teams and serious automators who need reliability.</div>
             <ul className="price-features">
               {["Dedicated n8n instance", "Unlimited workflows", "Custom domain support", "Priority support + onboarding", "Auto-backups daily", "More RAM & CPU"].map((f, i) => (
@@ -856,8 +870,7 @@ export default function N8nDeploy() {
                   )}
                   {plan === "pro" && (
                     <div style={{ padding: 14, background: "rgba(255,92,0,0.07)", border: "1px solid rgba(255,92,0,0.2)", borderRadius: 8, fontSize: 12, fontFamily: "JetBrains Mono", color: "var(--muted)", lineHeight: 1.6 }}>
-                      💳 After clicking Deploy, you'll be redirected to Stripe to complete payment. Your instance spins up instantly after confirmation.
-                    </div>
+                        💳 After clicking Deploy, you'll complete payment securely. Your instance spins up instantly after confirmation. Includes 3-day free trial!                    </div>
                   )}
                 </div>
                 <div className="wizard-footer">

@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { z } from "zod";
+import { Redis } from "@upstash/redis";
 
 // Input validation schema
 const verifySchema = z.object({
@@ -87,8 +88,20 @@ export async function POST(request) {
 
     // 6. Send credentials email
     const resend = new Resend(process.env.RESEND_API_KEY);
-    await resend.emails.send({
-      from: "n8nShip <onboarding@resend.dev>",
+
+// Store trial start date in Redis
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
+const trialKey = `trial:${email}`;
+const trialExists = await redis.get(trialKey);
+if (!trialExists) {
+  await redis.set(trialKey, Date.now(), { ex: 60 * 60 * 24 * 3 });
+}
+
+await resend.emails.send({
+  from: "n8nShip <onboarding@resend.dev>",
       to: email,
       subject: "🚀 Your n8n instance is ready!",
       html: `

@@ -10,6 +10,7 @@ const checkoutSchema = z.object({
     .max(254, "Email too long")
     .toLowerCase()
     .trim(),
+  currency: z.enum(["INR", "USD"]).default("INR"),
 });
 
 export async function POST(request) {
@@ -52,8 +53,8 @@ export async function POST(request) {
     });
 
     const order = await razorpay.orders.create({
-      amount: 1900 * 100,
-      currency: "INR",
+      amount: body.currency === "INR" ? 999 * 100 : 11 * 100,
+      currency: body.currency || "INR",
       receipt: `rcpt_${Date.now()}`,
       notes: { email, product: "n8nShip Pro" },
     });
