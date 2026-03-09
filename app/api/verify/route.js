@@ -100,13 +100,13 @@ export async function POST(request) {
 
     // 7. Save customer to Supabase
     const { error: customerError } = await supabase.from("customers").upsert({
-      email,
-      is_pro: true,
-      currency,
-      railway_project_url: deployResult.url,
-      trial_started_at: new Date().toISOString(),
-      trial_ends_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-    });
+  email,
+  is_pro: true,
+  currency,
+  railway_project_url: deployResult.url,
+  trial_started_at: new Date().toISOString(),
+  trial_ends_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+}, { onConflict: "email" });
     if (customerError) console.error("Supabase customer error:", customerError.message);
 
     // 8. Save payment to Supabase
