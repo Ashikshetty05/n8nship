@@ -99,7 +99,7 @@ export async function POST(request) {
     const deployResult = await deployN8n(email);
 
     // 7. Save customer to Supabase
-    await supabase.from("customers").upsert({
+    const { error: customerError } = await supabase.from("customers").upsert({
       email,
       is_pro: true,
       currency,
@@ -107,16 +107,18 @@ export async function POST(request) {
       trial_started_at: new Date().toISOString(),
       trial_ends_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
     });
+    if (customerError) console.error("Supabase customer error:", customerError.message);
 
     // 8. Save payment to Supabase
-    await supabase.from("payments").insert({
-      email,
-      razorpay_order_id,
-      razorpay_payment_id,
-      amount: currency === "INR" ? 999 : 11,
-      currency,
-      status: "success",
-    });
+const { error: paymentError } = await supabase.from("payments").insert({
+  email,
+  razorpay_order_id,
+  razorpay_payment_id,
+  amount: currency === "INR" ? 999 : 11,
+  currency,
+  status: "success",
+});
+if (paymentError) console.error("Supabase payment error:", paymentError.message);
 
     // 9. Store trial start date in Redis
     const trialKey = `trial:${email}`;
