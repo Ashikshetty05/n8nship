@@ -1,5 +1,30 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
+
+// Error Boundary Component
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", background: "#080808", color: "#F0EDE8" }}>
+          <h1 style={{ color: "#FF5C00" }}>Something went wrong 😕</h1>
+          <p style={{ color: "#888" }}>Please refresh the page or contact support.</p>
+          <button onClick={() => window.location.reload()} style={{ background: "#FF5C00", color: "#000", padding: "12px 24px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold", marginTop: "16px" }}>
+            Refresh Page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // Geo-based pricing
 const PRICES = {
@@ -126,6 +151,7 @@ export default function N8nDeploy() {
   ];
 
   return (
+    <ErrorBoundary>
     <>
       <script src="https://checkout.razorpay.com/v1/checkout.js" />
       <style>{`
@@ -929,5 +955,6 @@ export default function N8nDeploy() {
         </div>
       )}
     </>
+    </ErrorBoundary>
   );
 }
