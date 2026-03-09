@@ -815,9 +815,10 @@ export default function N8nDeploy() {
       <footer>
         <div className="footer-logo">n8n<span>Ship</span></div>
         <div className="footer-links">
-          <a href="#">Privacy Policy</a>
-          <a href="#">Terms</a>
-          <a href="mailto:hello@n8nship.com">Contact</a>
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/terms">Terms</a>
+          <a href="/refund">Refund Policy</a>
+          <a href="https://mail.google.com/mail/?view=cm&to=ashikshetty102@gmail.com" target="_blank">Contact</a>
         </div>
       </footer>
 
