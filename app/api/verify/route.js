@@ -174,38 +174,60 @@ if (paymentError) console.error("Supabase payment error:", paymentError.message)
   }
 }
 
-async function deployN8n(email) {
+async function deployN8n(email, retries = 3) {
   const projectName = `n8n-${email.split("@")[0]}-${Date.now()}`;
 
-  const projectRes = await fetch("https://backboard.railway.app/graphql/v2", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.RAILWAY_API_TOKEN}`,
-    },
-    body: JSON.stringify({
-      query: `
-        mutation projectCreate($input: ProjectCreateInput!) {
-          projectCreate(input: $input) {
-            id
-            name
-          }
-        }
-      `,
-      variables: {
-        input: { name: projectName },
-      },
-    }),
-  });
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const projectRes = await fetch("https://backboard.railway.app/graphql/v2", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.RAILWAY_API_TOKEN}`,
+        },
+        body: JSON.stringify({
+          query: `
+            mutation projectCreate($input: ProjectCreateInput!) {
+              projectCreate(input: $input) {
+                id
+                name
+              }
+            }
+          `,
+          variables: {
+            input: { name: projectName },
+          },
+        }),
+      });
 
-  const projectData = await projectRes.json();
-  console.log("Full Railway response:", JSON.stringify(projectData));
-  const projectId = projectData?.data?.projectCreate?.id;
+      const projectData = await projectRes.json();
+      console.log(`Railway attempt ${attempt}:`, JSON.stringify(projectData));
 
+      const projectId = projectData?.data?.projectCreate?.id;
+
+      if (projectId) {
+        return {
+          url: `https://railway.com/project/${projectId}`,
+          templateUrl: `https://railway.com/new/template/n8n`,
+        };
+      }
+
+      // If no projectId, wait before retrying
+      if (attempt < retries) {
+        console.log(`Retrying in ${attempt * 1000}ms...`);
+        await new Promise(r => setTimeout(r, attempt * 1000));
+      }
+    } catch (error) {
+      console.error(`Railway attempt ${attempt} failed:`, error.message);
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, attempt * 1000));
+      }
+    }
+  }
+
+  // All retries failed, return fallback
   return {
-    url: projectId
-      ? `https://railway.com/project/${projectId}`
-      : `https://railway.com/new`,
+    url: `https://railway.com/new`,
     templateUrl: `https://railway.com/new/template/n8n`,
   };
 }
