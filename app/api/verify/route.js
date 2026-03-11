@@ -179,6 +179,7 @@ async function deployN8n(email, retries = 3) {
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
+      // Step 1: Create Railway project
       const projectRes = await fetch("https://backboard.railway.app/graphql/v2", {
         method: "POST",
         headers: {
@@ -191,6 +192,14 @@ async function deployN8n(email, retries = 3) {
               projectCreate(input: $input) {
                 id
                 name
+                environments {
+                  edges {
+                    node {
+                      id
+                      name
+                    }
+                  }
+                }
               }
             }
           `,
@@ -204,22 +213,94 @@ async function deployN8n(email, retries = 3) {
       console.log(`Railway attempt ${attempt}:`, JSON.stringify(projectData));
 
       const projectId = projectData?.data?.projectCreate?.id;
+      const environmentId = projectData?.data?.projectCreate?.environments?.edges?.[0]?.node?.id;
 
-      if (projectId) {
-        return {
-          url: `https://railway.com/project/${projectId}`,
-          templateUrl: `https://railway.com/new/template/n8n`,
-        };
+      if (!projectId || !environmentId) {
+        throw new Error("Failed to create project or get environment ID");
       }
 
-      // If no projectId, wait before retrying
-      if (attempt < retries) {
-        console.log(`Retrying in ${attempt * 1000}ms...`);
-        await new Promise(r => setTimeout(r, attempt * 1000));
+      // Step 2: Create n8n service using Docker image
+      const serviceRes = await fetch("https://backboard.railway.app/graphql/v2", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.RAILWAY_API_TOKEN}`,
+        },
+        body: JSON.stringify({
+          query: `
+            mutation serviceCreate($input: ServiceCreateInput!) {
+              serviceCreate(input: $input) {
+                id
+                name
+              }
+            }
+          `,
+          variables: {
+            input: {
+              projectId,
+              name: "n8n",
+              source: {
+                image: "n8nio/n8n",
+              },
+            },
+          },
+        }),
+      });
+
+      const serviceData = await serviceRes.json();
+      console.log("Service created:", JSON.stringify(serviceData));
+      const serviceId = serviceData?.data?.serviceCreate?.id;
+
+      if (!serviceId) {
+        throw new Error("Failed to create n8n service");
       }
+
+      // Step 3: Set environment variables for n8n
+      const n8nEncryptionKey = crypto.randomBytes(24).toString("hex");
+      const variables = [
+        { name: "N8N_ENCRYPTION_KEY", value: n8nEncryptionKey },
+        { name: "N8N_USER_MANAGEMENT_DISABLED", value: "false" },
+        { name: "WEBHOOK_URL", value: `https://${projectName}.up.railway.app` },
+        { name: "GENERIC_TIMEZONE", value: "Asia/Kolkata" },
+      ];
+
+      for (const variable of variables) {
+        await fetch("https://backboard.railway.app/graphql/v2", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.RAILWAY_API_TOKEN}`,
+          },
+          body: JSON.stringify({
+            query: `
+              mutation variableUpsert($input: VariableUpsertInput!) {
+                variableUpsert(input: $input)
+              }
+            `,
+            variables: {
+              input: {
+                projectId,
+                environmentId,
+                serviceId,
+                name: variable.name,
+                value: variable.value,
+              },
+            },
+          }),
+        });
+      }
+
+      console.log("n8n deployed successfully!");
+
+      return {
+        url: `https://railway.com/project/${projectId}`,
+        templateUrl: `https://railway.com/new/template/n8n`,
+      };
+
     } catch (error) {
       console.error(`Railway attempt ${attempt} failed:`, error.message);
       if (attempt < retries) {
+        console.log(`Retrying in ${attempt * 1000}ms...`);
         await new Promise(r => setTimeout(r, attempt * 1000));
       }
     }
