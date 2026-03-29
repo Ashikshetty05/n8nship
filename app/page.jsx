@@ -802,7 +802,7 @@ export default function N8nDeploy() {
       <div id="security" className="security-row">
         {[
           { icon: "🔒", label: "SSL / HTTPS everywhere" },
-          { icon: "💳", label: "Payments via Stripe" },
+          { icon: "💳", label: "Payments via Razorpay" },
           { icon: "🛡️", label: "No data stored client-side" },
           { icon: "🔑", label: "Credentials emailed securely" },
           { icon: "🌍", label: "Railway infrastructure" },
